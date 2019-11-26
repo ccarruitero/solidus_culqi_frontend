@@ -21,7 +21,14 @@ require 'rspec/rails'
 require 'database_cleaner'
 require 'ffaker'
 require 'pry'
-require 'shoulda'
+require 'vcr'
+require 'webmock'
+require 'capybara/rspec'
+require 'selenium-webdriver'
+require 'webdrivers/chromedriver'
+
+Capybara.javascript_driver = :selenium_chrome_headless
+Capybara.default_max_wait_time = 30
 
 # Requires supporting ruby files with custom matchers and macros, etc,
 # in spec/support/ and its subdirectories.
@@ -33,23 +40,19 @@ require 'spree/testing_support/capybara_ext'
 require 'spree/testing_support/controller_requests'
 require 'spree/testing_support/factories'
 require 'spree/testing_support/url_helpers'
+require 'spree/testing_support/preferences'
 
-# Requires factories defined in lib/<%= name %>/factories.rb
-require '<%= name %>/factories'
+# Requires factories defined in lib/solidus_culqi_frontend/factories.rb
+require 'solidus_culqi_frontend/factories'
 
 RSpec.configure do |config|
   config.include FactoryBot::Syntax::Methods
+  config.include CulqiHelper
+  config.include Spree::TestingSupport::UrlHelpers
+  config.include Spree::TestingSupport::Preferences
 
   # Infer an example group's spec type from the file location.
   config.infer_spec_type_from_file_location!
-
-  # == URL Helpers
-  #
-  # Allows access to Spree's routes in specs:
-  #
-  # visit spree.admin_path
-  # current_path.should eql(spree.products_path)
-  config.include Spree::TestingSupport::UrlHelpers
 
   # == Mock Framework
   #
@@ -86,13 +89,29 @@ RSpec.configure do |config|
     DatabaseCleaner.clean
   end
 
+  config.after(:each, js: true) do
+    errors = page.driver.browser.manage.logs.get(:browser)
+    if errors.present?
+      aggregate_failures 'javascript errors' do
+        errors.each do |error|
+          expect(error.level).not_to eq('SEVERE'), error.message
+          next unless error.level == 'WARNING'
+
+          warn 'WARN: javascript warning'
+          warn error.message
+        end
+      end
+    end
+  end
+
   config.fail_fast = ENV['FAIL_FAST'] || false
   config.order = 'random'
 end
 
-Shoulda::Matchers.configure do |config|
-  config.integrate do |with|
-    with.test_framework :rspec
-    with.library :rails
-  end
+VCR.configure do |c|
+  c.cassette_library_dir = "spec/cassettes"
+  c.hook_into :webmock
+  c.ignore_localhost = true
+  c.configure_rspec_metadata!
+  c.default_cassette_options = { re_record_interval: 7.days }
 end
