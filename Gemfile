@@ -8,5 +8,3 @@ branch = ENV.fetch('SOLIDUS_BRANCH', 'master')
 gem 'solidus', github: 'solidusio/solidus', branch: branch
 
 gemspec
-
-gem 'solidus_culqi', path: '../solidus_culqi'
